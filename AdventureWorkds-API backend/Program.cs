@@ -1,4 +1,10 @@
+using AdventureWorkds_API_backend;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddDbContext<AdventureWorks2008R2Context>(options =>
+
+    options.UseSqlServer(builder.Configuration.GetConnectionString("AdventureWorksContext")));
 
 // Add services to the container.
 
