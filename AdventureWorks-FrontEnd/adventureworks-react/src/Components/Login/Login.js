@@ -1,10 +1,46 @@
 
 import { useState } from "react";
+import Axios from "axios"
+import { useNavigate } from 'react-router-dom';
 function Login() {
+
+ const navigate = useNavigate();
+
+
     const handleSubmit = (event) => {
         event.preventDefault();
         console.log(inputs)
-        
+       // Axios.get("https://api.publicapis.org/entries").then().then((response)=>{
+      //  console.log(response);
+      //   Axios
+      // .post("https://localhost:7003/api/Employees/Login", {
+      //   LoginID: inputs.LoginID,
+      //   Password: "asdasdasd"
+      // })
+      // .then((response) => {
+      //   console.log(response.data);
+      // });
+      Axios({
+        method: 'post',
+        url: 'https://localhost:7003/api/Employees/Login',
+        data: {
+        LoginID: inputs.LoginID,
+        Password: "asdasdasd"
+      },
+        headers: { "Content-Type": "application/json" },
+    })
+    .then(function (response) {
+        if(response.data)
+        {
+          localStorage.setItem('token', response.data.token)
+          localStorage.setItem('BusinessEntityId', response.data.businessEntityId)
+          navigate('/Dashboard'+"/"+response.data.businessEntityId);
+        }
+    })
+    .catch(function (error) {
+      alert(error.message)
+    });
+       // })
         
       }
       const [inputs, setInputs] = useState({});
@@ -28,9 +64,9 @@ function Login() {
      <form onSubmit={handleSubmit}>
         
        <div className="form-outline mb-4">
-         <input type="email" name="email" value={inputs.email || ""} onChange={handleChange}   className="form-control form-control-lg"
-           placeholder="Enter a valid email address" />
-         <label className="form-label">Email address</label>
+         <input type="text" name="LoginID" value={inputs.LoginID || ""} onChange={handleChange}   className="form-control form-control-lg"
+           placeholder="Enter a valid LoginID address" />
+         <label className="form-label">LoginID address</label>
        </div>
 
        

@@ -6,6 +6,10 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using AdventureWorkds_API_backend;
+using AutoMapper;
+using AdventureWorkds_API_backend.Models;
+using AdventureWorkds_API_backend.AuthService;
+using Microsoft.AspNetCore.Authorization;
 
 namespace AdventureWorkds_API_backend.Controllers
 {
@@ -14,41 +18,57 @@ namespace AdventureWorkds_API_backend.Controllers
     public class EmployeesController : ControllerBase
     {
         private readonly AdventureWorks2008R2Context _context;
-
-        public EmployeesController(AdventureWorks2008R2Context context)
+        private readonly IMapper _mapper;
+        private readonly IJwtAuth _jwtAuth;
+        public EmployeesController(AdventureWorks2008R2Context context,IMapper mapper, IJwtAuth jwtAuth)
         {
+            _mapper = mapper;
             _context = context;
+            this._jwtAuth = jwtAuth;
+
         }
 
         // GET: api/Employees
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<Employee>>> GetEmployees()
+        [HttpPost]
+        [Route("GetEmployees")]
+        [Authorize]
+        public async Task<ActionResult<IEnumerable<Employee>>> GetEmployees(GridOptionsParameter gridOptionsParameter)
         {
           if (_context.Employees == null)
           {
               return NotFound();
           }
-          var data=  await _context.Employees.ToListAsync();
+            var data = await _context.Employees.OrderByDescending(x=>x.BusinessEntityId)
+                             .Skip((gridOptionsParameter.PageNumber - 1) * gridOptionsParameter.PageSize)
+                             .Take(gridOptionsParameter.PageSize)
+                             .ToListAsync();
             return data;
         }
 
         // GET: api/Employees/5
+        
         [HttpGet("{id}")]
-        public async Task<ActionResult<Employee>> GetEmployee(int id)
+        [Authorize]
+        public async Task<ActionResult<EmployeeVModel>> GetEmployee(int id)
         {
-          if (_context.Employees == null)
-          {
-              return NotFound();
-          }
-            var employee = await _context.Employees.FindAsync(id);
+          
+            var employee =await _context.Employees.Include(x => x.EmployeePayHistories)
+                                                       .Include(x => x.BusinessEntity)
+                                                       .Include(x => x.EmployeeDepartmentHistories)
+                                                       .Include(x => x.PurchaseOrderHeaders)
+                                                       .Include(x => x.JobCandidates)
+                                                       .Where(x => x.BusinessEntityId == id).FirstOrDefaultAsync();
 
             if (employee == null)
             {
                 return NotFound();
             }
+            var employeeData = _mapper.Map<Employee, EmployeeVModel>(employee);
 
-            return employee;
+            return employeeData;
         }
+
+
 
         // PUT: api/Employees/5
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
@@ -80,22 +100,49 @@ namespace AdventureWorkds_API_backend.Controllers
 
             return NoContent();
         }
+        [HttpPost]
+        [Route("Login")]
+        public async Task<ActionResult<Login>> Login(Login login)
+        {
+            var token = _jwtAuth.Authentication(login.LoginID, login.Password);
+            var employeeData = await _context.Employees.Include(x=>x.EmployeePayHistories)
+                                                        .Include(x=>x.BusinessEntity)
+                                                        .Include(x=>x.EmployeeDepartmentHistories)
+                                                        .Include(x=>x.PurchaseOrderHeaders)
+                                                        .Include(x=>x.JobCandidates)
+                                                        .Where(x => x.LoginId == login.LoginID).FirstOrDefaultAsync();
+            
+            if (employeeData == null)
+            {
+                return Unauthorized();
+            }
+            else
+            {
+
+                 login.Token = token;
+                login.BusinessEntityId = employeeData.BusinessEntityId.ToString();
+                return login;
+            }
+            
+        }
 
         // POST: api/Employees
         // To protect from overposting attacks, see https://go.microsoft.com/fwlink/?linkid=2123754
         [HttpPost]
-        public async Task<ActionResult<Employee>> PostEmployee(Employee employee)
+        [Route("PostEmployee")]
+        public async Task<ActionResult<EmployeeVModel>> PostEmployee(EmployeeVModel employee)
         {
           if (_context.Employees == null)
           {
               return Problem("Entity set 'AdventureWorks2008R2Context.Employees'  is null.");
           }
-            _context.Employees.Add(employee);
+            var employeeData = _mapper.Map<EmployeeVModel,Employee >(employee);
+            _context.Employees.Add(employeeData);
             try
             {
                 await _context.SaveChangesAsync();
             }
-            catch (DbUpdateException)
+            catch (DbUpdateException ex)
             {
                 if (EmployeeExists(employee.BusinessEntityId))
                 {
